@@ -3,6 +3,7 @@ from flask import request
 from flask_smorest import Blueprint, abort
 from flask.views import MethodView
 from data import stores, items
+from schemas import ItemSchema, ItemUpdateSchema
 
 
 blueprint = Blueprint("Items", __name__, description="Operations on items")
@@ -11,6 +12,7 @@ blueprint = Blueprint("Items", __name__, description="Operations on items")
 # BLUEPRINT FOR SINGLE ITEM DATA
 @blueprint.route("/item/<string:item_id>")
 class Item(MethodView):
+    @blueprint.response(200, ItemSchema)
     def get(self, item_id):
         try:
             return items[item_id]
@@ -24,13 +26,9 @@ class Item(MethodView):
         except KeyError:
             abort(404, "Item not found.")
 
-    def put(self, item_id):
-        item_data = request.get_json()
-        if "name" not in item_data or "price" not in item_data:
-            abort(
-                400,
-                "Bad request. Ensure that 'name' and 'price' are in the JSON payload.",
-            )
+    @blueprint.arguments(ItemUpdateSchema)
+    @blueprint.response(200, ItemSchema)
+    def put(self, item_data, item_id):
         try:
             selected_item = items[item_id]
             selected_item |= item_data
@@ -42,22 +40,13 @@ class Item(MethodView):
 # BLUEPRINT FOR ALL ITEMS DATA AND CREATE A NEW ITEM
 @blueprint.route("/item")
 class ItemList(MethodView):
+    @blueprint.response(200, ItemSchema(many=True))
     def get(self):
-        return {"items": list(items.values())}, 200
+        return items.values()
 
-    def post(self):
-        item_data = request.get_json()
-
-        if (
-            "price" not in item_data
-            or "store_id" not in item_data
-            or "name" not in item_data
-        ):
-            abort(
-                400,
-                "Bad request. Ensure that 'price', 'store_id', and 'name' are in the JSON payload.",
-            )
-
+    @blueprint.arguments(ItemSchema)
+    @blueprint.response(201, ItemSchema)
+    def post(self, item_data):
         for item in items.values():
             if (
                 item_data["name"] == item["name"]
@@ -72,4 +61,4 @@ class ItemList(MethodView):
         new_item = {**item_data, "id": item_id}
         items[item_id] = new_item
 
-        return new_item, 201
+        return new_item
