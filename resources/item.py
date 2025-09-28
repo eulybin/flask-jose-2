@@ -1,0 +1,75 @@
+import uuid
+from flask import request
+from flask_smorest import Blueprint, abort
+from flask.views import MethodView
+from data import stores, items
+
+
+blueprint = Blueprint("Items", __name__, description="Operations on items")
+
+
+# BLUEPRINT FOR SINGLE ITEM DATA
+@blueprint.route("/item/<string:item_id>")
+class Item(MethodView):
+    def get(self, item_id):
+        try:
+            return items[item_id]
+        except KeyError:
+            abort(404, "Item not found.")
+
+    def delete(self, item_id):
+        try:
+            del items[item_id]
+            return {"message": "Item was deleted."}
+        except KeyError:
+            abort(404, "Item not found.")
+
+    def put(self, item_id):
+        item_data = request.get_json()
+        if "name" not in item_data or "price" not in item_data:
+            abort(
+                400,
+                "Bad request. Ensure that 'name' and 'price' are in the JSON payload.",
+            )
+        try:
+            selected_item = items[item_id]
+            selected_item |= item_data
+            return selected_item
+        except KeyError:
+            abort(404, "Item not found.")
+
+
+# BLUEPRINT FOR ALL ITEMS DATA AND CREATE A NEW ITEM
+@blueprint.route("/item")
+class ItemList(MethodView):
+    def get(self):
+        return {"items": list(items.values())}, 200
+
+    def post(self):
+        item_data = request.get_json()
+
+        if (
+            "price" not in item_data
+            or "store_id" not in item_data
+            or "name" not in item_data
+        ):
+            abort(
+                400,
+                "Bad request. Ensure that 'price', 'store_id', and 'name' are in the JSON payload.",
+            )
+
+        for item in items.values():
+            if (
+                item_data["name"] == item["name"]
+                and item_data["store_id"] == item["store_id"]
+            ):
+                abort(400, "Item already exists.")
+
+        if item_data["store_id"] not in stores:
+            abort(404, "Store not found.")
+
+        item_id = uuid.uuid4().hex
+        new_item = {**item_data, "id": item_id}
+        items[item_id] = new_item
+
+        return new_item, 201
