@@ -7,7 +7,7 @@ from data import stores, items
 app = Flask(__name__)
 
 
-# routes for STORES
+# --------------- routes for STORES ---------------
 @app.get("/store")
 def get_stores():
     return {"stores": list(stores.values())}, 200
@@ -26,7 +26,7 @@ def create_store():
     store_data = request.get_json()
     if "name" not in store_data:
         abort(400, "Bad request. Ensure that the 'name' is included in the JSON body.")
-    for store in stores:
+    for store in stores.values():
         if store_data["name"] == store["name"]:
             abort(400, "This store already exists.")
     store_id = uuid.uuid4().hex
@@ -35,7 +35,17 @@ def create_store():
     return new_store, 201
 
 
-# routes for ITEMS
+# DELETE a store with the store_id
+@app.delete("/store/<string:store_id>")
+def delete_store(store_id):
+    try:
+        del stores[store_id]
+        return {"message": "Store was deleted."}
+    except KeyError:
+        abort(404, "Store not found.")
+
+
+# --------------- routes for ITEMS ---------------
 @app.get("/item")
 def get_items():
     return {"items": list(items.values())}, 200
@@ -80,3 +90,30 @@ def create_item():
     items[item_id] = new_item
 
     return new_item, 201
+
+
+# DELETE an item with the item_id
+@app.delete("/item/<string:item_id>")
+def delete_item(item_id):
+    try:
+        del items[item_id]
+        return {"message": "Item was deleted."}
+    except KeyError:
+        abort(404, "Item not found.")
+
+
+# UPDATE an item with the item_id
+@app.put("/item/<string:item_id>")
+def update_item(item_id):
+    item_data = request.get_json()
+    if "name" not in item_data or "price" not in item_data:
+        abort(
+            400,
+            "Bad request. Ensure that 'name' and 'price' are in the JSON payload.",
+        )
+    try:
+        selected_item = items[item_id]
+        selected_item |= item_data
+        return selected_item
+    except KeyError:
+        abort(404, "Item not found.")
