@@ -2,7 +2,7 @@ import uuid
 from flask import request
 from flask_smorest import Blueprint, abort
 from flask.views import MethodView
-from data import stores
+from db import stores
 from schemas import StoreSchema
 
 
