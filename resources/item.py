@@ -1,9 +1,10 @@
-import uuid
 from flask import request
 from flask_smorest import Blueprint, abort
 from flask.views import MethodView
-from db import stores, items
+from sqlalchemy.exc import SQLAlchemyError
 from schemas import ItemSchema, ItemUpdateSchema
+from models import ItemModel
+from db import db
 
 
 blueprint = Blueprint("Items", __name__, description="Operations on items")
@@ -14,27 +15,28 @@ blueprint = Blueprint("Items", __name__, description="Operations on items")
 class Item(MethodView):
     @blueprint.response(200, ItemSchema)
     def get(self, item_id):
-        try:
-            return items[item_id]
-        except KeyError:
-            abort(404, "Item not found.")
+        item = ItemModel.query.get_or_404(item_id)
+        return item
 
     def delete(self, item_id):
-        try:
-            del items[item_id]
-            return {"message": "Item was deleted."}
-        except KeyError:
-            abort(404, "Item not found.")
+        item = ItemModel.query.get_or_404(item_id)
+        db.session.delete(item)
+        db.session.commit()
+        return {"message": "Item was deleted."}
 
     @blueprint.arguments(ItemUpdateSchema)
     @blueprint.response(200, ItemSchema)
     def put(self, item_data, item_id):
-        try:
-            selected_item = items[item_id]
-            selected_item |= item_data
-            return selected_item
-        except KeyError:
-            abort(404, "Item not found.")
+        item = ItemModel.query.get(item_id)
+        if item:
+            item.name = item_data["name"]
+            item.price = item_data["price"]
+        else:
+            item = ItemModel(id=item_id, **item_data)
+
+        db.session.add(item)
+        db.session.commit()
+        return item
 
 
 # BLUEPRINT FOR ALL ITEMS DATA AND CREATE A NEW ITEM
@@ -42,23 +44,16 @@ class Item(MethodView):
 class ItemList(MethodView):
     @blueprint.response(200, ItemSchema(many=True))
     def get(self):
-        return items.values()
+        return ItemModel.query.all()
 
     @blueprint.arguments(ItemSchema)
     @blueprint.response(201, ItemSchema)
     def post(self, item_data):
-        for item in items.values():
-            if (
-                item_data["name"] == item["name"]
-                and item_data["store_id"] == item["store_id"]
-            ):
-                abort(400, "Item already exists.")
-
-        if item_data["store_id"] not in stores:
-            abort(404, "Store not found.")
-
-        item_id = uuid.uuid4().hex
-        new_item = {**item_data, "id": item_id}
-        items[item_id] = new_item
+        new_item = ItemModel(**item_data)
+        try:
+            db.session.add(new_item)
+            db.session.commit()
+        except SQLAlchemyError:
+            abort(500, "An error occurred while inserting the item into the DB.")
 
         return new_item
